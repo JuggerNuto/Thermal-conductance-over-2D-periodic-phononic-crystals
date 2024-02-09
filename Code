@@ -1,0 +1,171 @@
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from matplotlib.animation import FuncAnimation
+
+#We are going to define grids with squared holes. Since we want to leave a space of size 1 between the holes and the sides,
+#we will take always that into account when defining the grids. For example, if we want a grid of 3x3 holes, we will define a grid of 5x5, plus the sides.
+
+def grid(holes_rows, holes_columns,hole_size):
+    grid = np.ones((holes_rows*(hole_size+1)+1, holes_columns*(hole_size+1)+1))
+    for i in range(0, holes_rows):
+        for j in range(0, holes_columns):
+            for k in range(1, hole_size+1):
+                for l in range(1, hole_size+1):
+                    grid[i*(hole_size+1)+k][j*(hole_size+1)+l] = 0
+    return grid
+
+#We will define a function that calculates the mass and density of a grid
+def mass_density(holes_rows, holes_columns,hole_size):
+    number_of_holes = holes_columns*holes_rows
+    length = holes_rows*(hole_size+1)+1
+    width = holes_columns*(hole_size+1)+1
+    mass = length*width-number_of_holes*(hole_size**2)
+    density=mass/(length*width)
+    return mass, density
+
+#Let's test it for different grids. The idea is that the density of the grids is the same if the hole size is the same. 
+#Then, when building a membrane with mass m, we can decide the structure properly.
+for i in range (2,4):
+    print(mass_density(2,3,i),mass_density(2,4,i),mass_density(2,5,i),mass_density(3,3,i),mass_density(3,4,i))
+
+#We can see that the density is similar when choosing more than one hole, for the same hole size.
+
+# Calculated parameters. Alpha is assumed to be 1.0.
+alpha = 1.0
+delta_x=1
+delta_t = (delta_x ** 2)/(4 * alpha)
+gamma = (alpha * delta_t) / (delta_x ** 2)
+
+#We define our initial conditions. Remember that the left side is 100 degrees, the rest is 0 degrees.
+#We have copied the size of the grid and applied the initial conditions.
+max_time = 500
+def initial_conditions(holes_rows,holes_columns,hole_size):
+    u=np.empty((max_time, holes_rows*(hole_size+1)+1, holes_columns*(hole_size+1)+1))
+    for i in range(0,holes_rows*(hole_size+1)+1):
+        for j in range(0,holes_columns*(hole_size+1)+1):
+            if i==0:
+                u[0][i][j]=100
+            else:
+                u[0][i][j]=25
+    return u
+
+#We define the function that will calculate the heat transfer.
+def heat_transfer(holes_rows, holes_columns,hole_size):
+    g = grid(holes_rows, holes_columns,hole_size)
+    u = initial_conditions(holes_rows, holes_columns,hole_size)
+    for t in range(0, max_time-1):
+        for j in range(0, holes_columns*(hole_size+1)+1):
+            for i in range(1, holes_rows*(hole_size+1)):
+                u[t+1][0][j]=u[0][0][j]
+                if j==0:
+                        if g[i][1]!=0:
+                            u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] + u[t][i][j+1] - 3*u[t][i][j])
+                        elif g[i][1]==0:
+                            u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] - 2*u[t][i][j])
+                elif j==holes_columns*(hole_size+1):
+                        if g[i][j-1]!=0:
+                            u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] + u[t][i][j-1] - 3*u[t][i][j])
+                        elif g[i][j-1]==0:
+                            u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] - 2*u[t][i][j])
+        
+        for i in range(1, holes_rows*(hole_size+1)):
+            for j in range(1, holes_columns*(hole_size+1)):
+                if g[i][j] != 0:
+                    if g[i+1][j]!=0 and g[i-1][j]!=0 and g[i][j-1]!=0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] + u[t][i][j+1] + u[t][i][j-1] - 4*u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]!=0 and g[i][j-1]!=0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i-1][j] + u[t][i][j+1] + u[t][i][j-1] - 3*u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]==0 and g[i][j-1]!=0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i][j+1] + u[t][i][j-1] - 3*u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]!=0 and g[i][j-1]==0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] + u[t][i][j+1] - 3*u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]!=0 and g[i][j-1]!=0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] + u[t][i][j-1] - 3*u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]==0 and g[i][j-1]!=0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i][j+1] + u[t][i][j-1] - 2*u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]!=0 and g[i][j-1]==0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i-1][j] - 2*u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]!=0 and g[i][j-1]==0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i-1][j] + u[t][i][j+1]- 2*u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]!=0 and g[i][j-1]!=0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i-1][j] + u[t][i][j-1]- 2*u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]==0 and g[i][j-1]==0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i][j+1]- 2*u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]==0 and g[i][j-1]!=0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j] + u[t][i][j-1]- 2*u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]==0 and g[i][j-1]==0 and g[i][j+1]!=0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i][j+1]- u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]==0 and g[i][j-1]!=0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i][j-1]- u[t][i][j])
+                    elif g[i+1][j]==0 and g[i-1][j]!=0 and g[i][j-1]==0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i-1][j]- u[t][i][j])
+                    elif g[i+1][j]!=0 and g[i-1][j]==0 and g[i][j-1]==0 and g[i][j+1]==0:
+                        u[t+1][i][j] = u[t][i][j] + gamma * (u[t][i+1][j]- u[t][i][j])
+    return u
+
+
+def plotheatmap(u_k, k):
+    # Clear the current plot figure
+    plt.clf()
+
+    plt.title(f"Temperature at t = {k*delta_t:.3f} unit time")
+    plt.xlabel("x")
+    plt.ylabel("y")
+
+    # This is to plot u_k (u at time-step k)
+    plt.pcolormesh(u_k, cmap=plt.cm.jet, vmin=0, vmax=100)
+    plt.colorbar()
+
+    return plt
+
+# Do the calculation here
+u = heat_transfer(2,3,3)
+u242 = heat_transfer(2,4,2)
+u252 = heat_transfer(2,5,2)
+u332 = heat_transfer(3,3,2)
+u342 = heat_transfer(3,4,2)
+
+def animate(k):
+    plotheatmap(u[k], k)
+
+def lastframe(k):
+    plotheatmap(u[k], k)
+    plt.savefig("heat_equation_stationary.png")
+
+anim = animation.FuncAnimation(plt.figure(), animate, interval=1, frames=max_time, repeat=False)
+anim.save("heat_equation_solution.gif")
+lastframe(max_time-1)
+
+
+
+
+#We want to compare the results of the different cases
+def calculate_final_temperature(holes_rows, holes_columns, hole_size):
+    u = heat_transfer(holes_rows, holes_columns, hole_size)
+    final_temperature = u[max_time-1]  # Extract the final temperature at max_time
+
+    return final_temperature
+
+# Define the grid structures you want to compare
+grid_structures = [(2, 2, 3),(2,3,3),(2,4,3),(2,5,3),(3,3,3),(3,4,3),(3,5,3),(3,6,3),(4,4,3),(2, 3, 2), (2, 4, 2), (2, 5, 2), (3, 3, 2), (3, 4, 2), (3, 5, 2),(4, 4, 2)]
+
+# Create a table to store the temperatures
+table = []
+header = ["Grid Structure", "Temperature"]
+
+# Calculate the final temperatures for each grid structure and store them in the table
+for structure in grid_structures:
+    grid_temp = calculate_final_temperature(*structure)
+    avg_temp = np.mean(grid_temp)  # Calculate the average temperature for the grid structure
+    table.append([structure, avg_temp])
+
+# Display the table
+print("Temperature Comparison:")
+print("-----------------------")
+print("{:<20} {:<10}".format(header[0], header[1]))
+for row in table:
+    print("{:<20} {:<10.2f}".format(str(row[0]), row[1]))
+
+print("Done!")
